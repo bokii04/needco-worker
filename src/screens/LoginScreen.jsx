@@ -6,17 +6,22 @@ export default function LoginScreen() {
 
   const handleGoogle = async () => {
     setLoading("google");
-    await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: window.location.origin } });
+    await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: "https://needco-worker.vercel.app" }
+    });
   };
 
   const handleFacebook = async () => {
     setLoading("facebook");
-    await supabase.auth.signInWithOAuth({ provider: "facebook", options: { redirectTo: window.location.origin } });
+    await supabase.auth.signInWithOAuth({
+      provider: "facebook",
+      options: { redirectTo: "https://needco-worker.vercel.app" }
+    });
   };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh", background: "var(--bg)" }}>
-      {/* Hero */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "60px 32px 40px", position: "relative", overflow: "hidden" }}>
         <div style={{ position: "absolute", top: -100, right: -80, width: 300, height: 300, borderRadius: "50%", background: "radial-gradient(circle, rgba(201,168,76,0.12) 0%, transparent 70%)" }} />
         <div style={{ position: "absolute", bottom: -60, left: -60, width: 250, height: 250, borderRadius: "50%", background: "radial-gradient(circle, rgba(201,168,76,0.06) 0%, transparent 70%)" }} />
@@ -30,7 +35,6 @@ export default function LoginScreen() {
           <p style={{ color: "var(--gold)", fontSize: 13, letterSpacing: "0.15em", textTransform: "uppercase", fontWeight: 600 }}>Worker Portal</p>
         </div>
 
-        {/* Stats */}
         <div className="fade-up-2" style={{ display: "flex", gap: 32, marginTop: 48 }}>
           {[["500+","Jobs monthly"],["4.8★","Avg rating"],["₱850","Daily avg"]].map(([val, label]) => (
             <div key={label} style={{ textAlign: "center" }}>
@@ -41,7 +45,6 @@ export default function LoginScreen() {
         </div>
       </div>
 
-      {/* Form */}
       <div style={{ background: "var(--bg-2)", borderRadius: "28px 28px 0 0", padding: "32px 24px 40px", border: "1px solid var(--border)" }}>
         <div className="fade-up" style={{ marginBottom: 28 }}>
           <h2 style={{ fontSize: 22, marginBottom: 6 }}>Start earning today</h2>
