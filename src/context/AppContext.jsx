@@ -14,13 +14,24 @@ export function AppProvider({ children }) {
 
   const saveAndSetUser = async (u) => {
     try {
-      await supabase.from("users").upsert({
-        id: u.id,
-        name: u.user_metadata?.full_name || u.email,
-        phone: u.phone || null,
-        role: "worker"
-      }, { onConflict: "id" });
+      // Check existing user
+      const { data: existingUser } = await supabase
+        .from("users")
+        .select("*")
+        .eq("id", u.id)
+        .single();
 
+      if (!existingUser) {
+        await supabase.from("users").upsert({
+          id: u.id,
+          name: u.user_metadata?.full_name || u.email,
+          phone: null,
+          role: "worker",
+          is_onboarded: false,
+        }, { onConflict: "id" });
+      }
+
+      // Check worker profile
       const { data: workerData } = await supabase
         .from("workers")
         .select("*")
@@ -28,19 +39,40 @@ export function AppProvider({ children }) {
         .single();
 
       setWorker(workerData || null);
-    } catch(e) {}
 
-    setUser({
-      id: u.id,
-      name: u.user_metadata?.full_name || u.email,
-      email: u.email,
-      avatar: u.user_metadata?.avatar_url || null,
-      role: "worker",
-      initials: (u.user_metadata?.full_name || u.email || "W")
-        .split(" ").map(n => n[0]).join("").substring(0, 2).toUpperCase()
-    });
+      setUser({
+        id: u.id,
+        name: existingUser?.name || u.user_metadata?.full_name || u.email,
+        email: u.email,
+        avatar: u.user_metadata?.avatar_url || null,
+        role: "worker",
+        is_onboarded: existingUser?.is_onboarded || false,
+        initials: (existingUser?.name || u.user_metadata?.full_name || u.email || "W")
+          .split(" ").map(n => n[0]).join("").substring(0, 2).toUpperCase()
+      });
 
-    setScreen(workerData?.status ? "home" : "onboarding");
+      // Route based on worker profile
+      if (!workerData) {
+        setScreen("onboarding");
+      } else {
+        setScreen("home");
+      }
+
+    } catch(e) {
+      console.error("Auth error:", e);
+      setUser({
+        id: u.id,
+        name: u.user_metadata?.full_name || u.email,
+        email: u.email,
+        avatar: u.user_metadata?.avatar_url || null,
+        role: "worker",
+        is_onboarded: false,
+        initials: (u.user_metadata?.full_name || u.email || "W")
+          .split(" ").map(n => n[0]).join("").substring(0, 2).toUpperCase()
+      });
+      setScreen("onboarding");
+    }
+
     setLoading(false);
   };
 
@@ -48,34 +80,45 @@ export function AppProvider({ children }) {
     const timeout = setTimeout(() => {
       setLoading(false);
       setScreen("login");
-    }, 3000);
+    }, 4000);
 
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       clearTimeout(timeout);
-      if (session?.user) await saveAndSetUser(session.user);
-      else { setLoading(false); setScreen("login"); }
-    }).catch(() => { clearTimeout(timeout); setLoading(false); setScreen("login"); });
+      if (session?.user) {
+        await saveAndSetUser(session.user);
+      } else {
+        setLoading(false);
+        setScreen("login");
+      }
+    }).catch(() => {
+      clearTimeout(timeout);
+      setLoading(false);
+      setScreen("login");
+    });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (session?.user) await saveAndSetUser(session.user);
-      else { setUser(null); setWorker(null); setScreen("login"); }
+      if (session?.user) {
+        await saveAndSetUser(session.user);
+      } else {
+        setUser(null);
+        setWorker(null);
+        setScreen("login");
+      }
     });
 
     return () => { clearTimeout(timeout); subscription.unsubscribe(); };
   }, []);
 
   const navigate = (s) => setScreen(s);
-  const updateWorker = (w) => setWorker(w);
+
   const logout = async () => {
     await supabase.auth.signOut();
-    setUser(null); setWorker(null);
+    setUser(null);
+    setWorker(null);
     navigate("login");
   };
 
   const toggleOnline = async (val) => {
-    if (val && "Notification" in window) {
-      await Notification.requestPermission();
-    }
     setIsOnline(val);
     if (worker?.id) {
       await supabase.from("workers").update({ is_available: val }).eq("id", worker.id);
@@ -92,7 +135,11 @@ export function AppProvider({ children }) {
   }
 
   return (
-    <AppContext.Provider value={{ screen, navigate, user, worker, setWorker, logout, isOnline, toggleOnline, activeJob, setActiveJob, earnings, setEarnings }}>
+    <AppContext.Provider value={{
+      screen, navigate, user, setUser, worker, setWorker,
+      logout, isOnline, toggleOnline,
+      activeJob, setActiveJob, earnings, setEarnings
+    }}>
       {children}
     </AppContext.Provider>
   );
