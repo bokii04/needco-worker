@@ -40,7 +40,7 @@ export function AppProvider({ children }) {
         .split(" ").map(n => n[0]).join("").substring(0, 2).toUpperCase()
     });
 
-    setScreen("home");
+    setScreen(workerData?.status ? "home" : "onboarding");
     setLoading(false);
   };
 
@@ -65,6 +65,7 @@ export function AppProvider({ children }) {
   }, []);
 
   const navigate = (s) => setScreen(s);
+  const updateWorker = (w) => setWorker(w);
   const logout = async () => {
     await supabase.auth.signOut();
     setUser(null); setWorker(null);
@@ -91,7 +92,7 @@ export function AppProvider({ children }) {
   }
 
   return (
-    <AppContext.Provider value={{ screen, navigate, user, worker, logout, isOnline, toggleOnline, activeJob, setActiveJob, earnings, setEarnings }}>
+    <AppContext.Provider value={{ screen, navigate, user, worker, setWorker, logout, isOnline, toggleOnline, activeJob, setActiveJob, earnings, setEarnings }}>
       {children}
     </AppContext.Provider>
   );
