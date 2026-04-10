@@ -8,6 +8,8 @@ import ProfileScreen from "./screens/ProfileScreen";
 import RegisterScreen from "./screens/RegisterScreen";
 import OnboardingScreen from "./screens/OnboardingScreen";
 import OnboardingResultScreen from "./screens/OnboardingResultScreen";
+import PendingScreen from "./screens/PendingScreen";
+import RejectedScreen from "./screens/RejectedScreen";
 import ChatScreen from "./screens/ChatScreen";
 import NotificationsScreen from "./screens/NotificationsScreen";
 import BottomNav from "./components/BottomNav";
@@ -25,6 +27,8 @@ function AppRouter() {
       case "register": return <RegisterScreen />;
       case "onboarding": return <OnboardingScreen />;
       case "onboarding_result": return <OnboardingResultScreen />;
+      case "pending": return <PendingScreen />;
+      case "rejected": return <RejectedScreen />;
       case "chat": return <ChatScreen />;
       case "notifications": return <NotificationsScreen />;
       default: return <LoginScreen />;

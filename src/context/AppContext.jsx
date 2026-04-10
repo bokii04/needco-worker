@@ -12,14 +12,17 @@ export function AppProvider({ children }) {
   const [activeJob, setActiveJob] = useState(null);
   const [earnings, setEarnings] = useState({ today: 0, jobs: 0, week: 0 });
 
+  const routeWorker = (workerData) => {
+    if (!workerData) return "onboarding";
+    if (workerData.status === "approved") return "home";
+    if (workerData.status === "rejected") return "rejected";
+    return "pending"; // pending or suspended
+  };
+
   const saveAndSetUser = async (u) => {
     try {
-      // Check existing user
       const { data: existingUser } = await supabase
-        .from("users")
-        .select("*")
-        .eq("id", u.id)
-        .single();
+        .from("users").select("*").eq("id", u.id).single();
 
       if (!existingUser) {
         await supabase.from("users").upsert({
@@ -31,12 +34,8 @@ export function AppProvider({ children }) {
         }, { onConflict: "id" });
       }
 
-      // Check worker profile
       const { data: workerData } = await supabase
-        .from("workers")
-        .select("*")
-        .eq("user_id", u.id)
-        .single();
+        .from("workers").select("*").eq("user_id", u.id).single();
 
       setWorker(workerData || null);
 
@@ -51,12 +50,7 @@ export function AppProvider({ children }) {
           .split(" ").map(n => n[0]).join("").substring(0, 2).toUpperCase()
       });
 
-      // Route based on worker profile
-      if (!workerData) {
-        setScreen("onboarding");
-      } else {
-        setScreen("home");
-      }
+      setScreen(routeWorker(workerData));
 
     } catch(e) {
       console.error("Auth error:", e);
@@ -84,12 +78,8 @@ export function AppProvider({ children }) {
 
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       clearTimeout(timeout);
-      if (session?.user) {
-        await saveAndSetUser(session.user);
-      } else {
-        setLoading(false);
-        setScreen("login");
-      }
+      if (session?.user) await saveAndSetUser(session.user);
+      else { setLoading(false); setScreen("login"); }
     }).catch(() => {
       clearTimeout(timeout);
       setLoading(false);
@@ -97,13 +87,8 @@ export function AppProvider({ children }) {
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (session?.user) {
-        await saveAndSetUser(session.user);
-      } else {
-        setUser(null);
-        setWorker(null);
-        setScreen("login");
-      }
+      if (session?.user) await saveAndSetUser(session.user);
+      else { setUser(null); setWorker(null); setScreen("login"); }
     });
 
     return () => { clearTimeout(timeout); subscription.unsubscribe(); };
