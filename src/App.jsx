@@ -7,6 +7,7 @@ import EarningsScreen from "./screens/EarningsScreen";
 import ProfileScreen from "./screens/ProfileScreen";
 import RegisterScreen from "./screens/RegisterScreen";
 import ChatScreen from "./screens/ChatScreen";
+import NotificationsScreen from "./screens/NotificationsScreen";
 import BottomNav from "./components/BottomNav";
 
 function AppRouter() {
@@ -21,10 +22,11 @@ function AppRouter() {
       case "profile": return <ProfileScreen />;
       case "register": return <RegisterScreen />;
       case "chat": return <ChatScreen />;
+      case "notifications": return <NotificationsScreen />;
       default: return <LoginScreen />;
     }
   };
-  const showNav = ["home","earnings","profile"].includes(screen);
+  const showNav = ["home","earnings","profile","notifications"].includes(screen);
   return (
     <div className="app-shell">
       <div className="screen-content">{renderScreen()}</div>

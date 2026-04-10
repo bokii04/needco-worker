@@ -72,6 +72,9 @@ export function AppProvider({ children }) {
   };
 
   const toggleOnline = async (val) => {
+    if (val && "Notification" in window) {
+      await Notification.requestPermission();
+    }
     setIsOnline(val);
     if (worker?.id) {
       await supabase.from("workers").update({ is_available: val }).eq("id", worker.id);
