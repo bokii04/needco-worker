@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useRef } from "react";
+import { createContext, useContext, useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 
 const AppContext = createContext(null);
@@ -11,74 +11,68 @@ export function AppProvider({ children }) {
   const [isOnline, setIsOnline] = useState(false);
   const [activeJob, setActiveJob] = useState(null);
   const [earnings, setEarnings] = useState({ today: 0, jobs: 0, week: 0 });
-  const screenRef = useRef("splash");
-
-  const setScreenSafe = (s) => {
-    screenRef.current = s;
-    setScreen(s);
-  };
 
   const routeWorker = (workerData) => {
     if (!workerData) return "onboarding";
     if (workerData.status === "approved") return "home";
     if (workerData.status === "rejected") return "rejected";
-    if (workerData.status === "pending" || workerData.status === "suspended") return "pending";
-    return "onboarding";
+    return "pending";
   };
 
   const saveAndSetUser = async (u) => {
     try {
-      // Get or create user
+      // Get user record
       let existingUser = null;
-      try {
-        const { data } = await supabase
-          .from("users").select("*").eq("id", u.id).single();
-        existingUser = data;
-      } catch(e) {
-        // User doesn't exist yet, create them
-        await supabase.from("users").insert({
-          id: u.id,
-          name: u.user_metadata?.full_name || u.email,
-          phone: null,
-          role: "worker",
-          is_onboarded: false,
-        });
+      const { data: userData } = await supabase
+        .from("users")
+        .select("*")
+        .eq("id", u.id)
+        .single();
+      existingUser = userData;
+
+      // Create if doesn't exist
+      if (!existingUser) {
+        const { data: newUser } = await supabase
+          .from("users")
+          .insert({
+            id: u.id,
+            name: u.user_metadata?.full_name || u.email,
+            phone: null,
+            role: "worker",
+            is_onboarded: false,
+          })
+          .select()
+          .single();
+        existingUser = newUser;
       }
 
-      // Get worker profile
-      let workerData = null;
-      try {
-        const { data } = await supabase
-          .from("workers").select("*").eq("user_id", u.id).single();
-        workerData = data;
-      } catch(e) {
-        // No worker profile yet - that's fine
-        workerData = null;
-      }
+      // Get worker record
+      const { data: workerData } = await supabase
+        .from("workers")
+        .select("*")
+        .eq("user_id", u.id)
+        .single();
+
+      console.log("User:", existingUser?.name, "Worker:", workerData?.status);
 
       setWorker(workerData || null);
-
       setUser({
         id: u.id,
         name: existingUser?.name || u.user_metadata?.full_name || u.email,
         email: u.email,
         avatar: u.user_metadata?.avatar_url || null,
-        role: "worker",
+        role: existingUser?.role || "worker",
         is_onboarded: existingUser?.is_onboarded || false,
         initials: (existingUser?.name || u.user_metadata?.full_name || u.email || "W")
           .split(" ").map(n => n[0]).join("").substring(0, 2).toUpperCase()
       });
 
-      // Only route if NOT already mid-onboarding
-      if (screenRef.current !== "onboarding") {
-        const destination = routeWorker(workerData);
-        console.log("Routing to:", destination, "worker status:", workerData?.status);
-        setScreenSafe(destination);
-      }
+      const destination = routeWorker(workerData);
+      console.log("Routing to:", destination);
+      setScreen(destination);
 
     } catch(e) {
       console.error("saveAndSetUser error:", e);
-      // Fallback — set basic user and go to onboarding only if no screen set
       setUser({
         id: u.id,
         name: u.user_metadata?.full_name || u.email,
@@ -89,51 +83,53 @@ export function AppProvider({ children }) {
         initials: (u.user_metadata?.full_name || u.email || "W")
           .split(" ").map(n => n[0]).join("").substring(0, 2).toUpperCase()
       });
-      if (screenRef.current !== "onboarding") {
-        setScreenSafe("onboarding");
-      }
+      setScreen("onboarding");
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   };
 
   useEffect(() => {
     const timeout = setTimeout(() => {
       setLoading(false);
-      setScreenSafe("login");
+      setScreen("login");
     }, 4000);
 
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       clearTimeout(timeout);
-      if (session?.user) await saveAndSetUser(session.user);
-      else { setLoading(false); setScreenSafe("login"); }
-    }).catch(() => {
-      clearTimeout(timeout);
-      setLoading(false);
-      setScreenSafe("login");
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log("Auth event:", event, "screen:", screenRef.current);
       if (session?.user) {
         await saveAndSetUser(session.user);
       } else {
+        setLoading(false);
+        setScreen("login");
+      }
+    }).catch(() => {
+      clearTimeout(timeout);
+      setLoading(false);
+      setScreen("login");
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log("Auth event:", event);
+      if (event === "SIGNED_IN" && session?.user) {
+        await saveAndSetUser(session.user);
+      } else if (event === "SIGNED_OUT") {
         setUser(null);
         setWorker(null);
-        setScreenSafe("login");
+        setScreen("login");
       }
     });
 
     return () => { clearTimeout(timeout); subscription.unsubscribe(); };
   }, []);
 
-  const navigate = (s) => setScreenSafe(s);
+  const navigate = (s) => setScreen(s);
 
   const logout = async () => {
     await supabase.auth.signOut();
     setUser(null);
     setWorker(null);
-    setScreenSafe("login");
+    setScreen("login");
   };
 
   const toggleOnline = async (val) => {
