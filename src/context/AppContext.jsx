@@ -11,7 +11,14 @@ export function AppProvider({ children }) {
   const [isOnline, setIsOnline] = useState(false);
   const [activeJob, setActiveJob] = useState(null);
   const [earnings, setEarnings] = useState({ today: 0, jobs: 0, week: 0 });
-  const isOnboardingRef = useRef(false);
+
+  // Track current screen in a ref so auth listener can read it
+  const screenRef = useRef("splash");
+
+  const setScreenSafe = (s) => {
+    screenRef.current = s;
+    setScreen(s);
+  };
 
   const routeWorker = (workerData) => {
     if (!workerData) return "onboarding";
@@ -20,7 +27,7 @@ export function AppProvider({ children }) {
     return "pending";
   };
 
-  const saveAndSetUser = async (u, forceRoute = true) => {
+  const saveAndSetUser = async (u) => {
     try {
       const { data: existingUser } = await supabase
         .from("users").select("*").eq("id", u.id).single();
@@ -51,9 +58,10 @@ export function AppProvider({ children }) {
           .split(" ").map(n => n[0]).join("").substring(0, 2).toUpperCase()
       });
 
-      // Only route if we're not already in onboarding flow
-      if (forceRoute && !isOnboardingRef.current) {
-        setScreen(routeWorker(workerData));
+      // Only route if NOT already in onboarding steps
+      const inOnboarding = screenRef.current === "onboarding";
+      if (!inOnboarding) {
+        setScreenSafe(routeWorker(workerData));
       }
 
     } catch(e) {
@@ -68,8 +76,8 @@ export function AppProvider({ children }) {
         initials: (u.user_metadata?.full_name || u.email || "W")
           .split(" ").map(n => n[0]).join("").substring(0, 2).toUpperCase()
       });
-      if (forceRoute && !isOnboardingRef.current) {
-        setScreen("onboarding");
+      if (screenRef.current !== "onboarding") {
+        setScreenSafe("onboarding");
       }
     }
 
@@ -79,32 +87,26 @@ export function AppProvider({ children }) {
   useEffect(() => {
     const timeout = setTimeout(() => {
       setLoading(false);
-      setScreen("login");
+      setScreenSafe("login");
     }, 4000);
 
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       clearTimeout(timeout);
-      if (session?.user) await saveAndSetUser(session.user, true);
-      else { setLoading(false); setScreen("login"); }
+      if (session?.user) await saveAndSetUser(session.user);
+      else { setLoading(false); setScreenSafe("login"); }
     }).catch(() => {
       clearTimeout(timeout);
       setLoading(false);
-      setScreen("login");
+      setScreenSafe("login");
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log("Auth event:", event, "onboarding:", isOnboardingRef.current);
       if (session?.user) {
-        // If already in onboarding, don't reroute — just update user data silently
-        if (isOnboardingRef.current) {
-          await saveAndSetUser(session.user, false);
-        } else {
-          await saveAndSetUser(session.user, true);
-        }
+        await saveAndSetUser(session.user);
       } else {
         setUser(null);
         setWorker(null);
-        setScreen("login");
+        setScreenSafe("login");
       }
     });
 
@@ -112,21 +114,14 @@ export function AppProvider({ children }) {
   }, []);
 
   const navigate = (s) => {
-    // Track if we're in onboarding flow
-    if (s === "onboarding") {
-      isOnboardingRef.current = true;
-    } else if (s === "home" || s === "pending" || s === "login") {
-      isOnboardingRef.current = false;
-    }
-    setScreen(s);
+    setScreenSafe(s);
   };
 
   const logout = async () => {
-    isOnboardingRef.current = false;
     await supabase.auth.signOut();
     setUser(null);
     setWorker(null);
-    setScreen("login");
+    setScreenSafe("login");
   };
 
   const toggleOnline = async (val) => {
