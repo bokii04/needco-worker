@@ -132,6 +132,7 @@ export default function OnboardingScreen() {
   const handleSubmit = async () => {
     setLoading(true);
     setError("");
+    var safetyTimeout = setTimeout(function() { setLoading(false); clearTimeout(safetyTimeout); navigate("onboarding_result"); }, 5000);
 
     try {
       const fullName = `${form.firstName} ${form.lastName}`.trim();
@@ -246,7 +247,7 @@ export default function OnboardingScreen() {
 
       setUser(prev => ({ ...prev, name: fullName, is_onboarded: true, role: "worker" }));
       setWorker(savedWorker);
-      navigate("onboarding_result");
+      clearTimeout(safetyTimeout); navigate("onboarding_result");
 
     } catch (e) {
       console.error("Submit error:", e);
