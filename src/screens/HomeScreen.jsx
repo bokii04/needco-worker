@@ -107,8 +107,9 @@ export default function HomeScreen() {
         .eq("id", job.id)
         .eq("status", "pending")
         .select()
-        .single();
+        
 
+      const updated = (data && data.length > 0) ? data[0] : null;
       if (error || !updated) {
         console.error("Failed to accept — job may already be taken:", error);
         setIncomingJob(null);
