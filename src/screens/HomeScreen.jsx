@@ -32,7 +32,6 @@ export default function HomeScreen() {
     }
   };
 
-  // REAL-TIME: Listen for new jobs from customers
   useEffect(() => {
     if (!isOnline || !worker) {
       if (channelRef.current) { supabase.removeChannel(channelRef.current); channelRef.current = null; }
@@ -42,33 +41,26 @@ export default function HomeScreen() {
     channelRef.current = supabase
       .channel("worker_jobs_" + user.id)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "jobs" }, (payload) => {
-        const newJob = payload.new;
+        var newJob = payload.new;
         console.log("[Worker] New job detected:", newJob.service, newJob.id);
-
         if (newJob.status === "pending" && !newJob.worker_id) {
-          const hasSkill = true;
-          if (hasSkill) {
-            setPendingJobs(prev => [newJob, ...prev]);
-            showIncomingJob(newJob);
-            if (Notification.permission === "granted") {
-              new Notification("🔔 New " + newJob.service + " job!", {
-                body: "₱" + newJob.price + " — " + (newJob.address || "Nearby"),
-              });
-            }
+          setPendingJobs(function(prev) { return [newJob].concat(prev); });
+          showIncomingJob(newJob);
+          if (Notification.permission === "granted") {
+            new Notification("New " + newJob.service + " job!", { body: "P" + newJob.price + " — " + (newJob.address || "Nearby") });
           }
         }
       })
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "jobs" }, (payload) => {
-        const updated = payload.new;
-        console.log("[Worker] Job updated:", updated.id, "→", updated.status);
+        var updated = payload.new;
+        console.log("[Worker] Job updated:", updated.id, "->", updated.status);
         if (updated.status !== "pending" || updated.worker_id) {
-          setPendingJobs(prev => prev.filter(j => j.id !== updated.id));
-          if (incomingJob?.id === updated.id) { setIncomingJob(null); clearTimer(); }
+          setPendingJobs(function(prev) { return prev.filter(function(j) { return j.id !== updated.id; }); });
         }
       })
-      .subscribe(status => console.log("[Worker] Realtime channel:", status));
+      .subscribe(function(status) { console.log("[Worker] Realtime channel:", status); });
 
-    return () => { if (channelRef.current) supabase.removeChannel(channelRef.current); };
+    return function() { if (channelRef.current) supabase.removeChannel(channelRef.current); };
   }, [isOnline, worker, user?.id]);
 
   useEffect(() => {
@@ -78,24 +70,24 @@ export default function HomeScreen() {
   const showIncomingJob = (job) => {
     setIncomingJob(job);
     setTimer(30);
-    clearTimer();
+    clearTimerFn();
     timerRef.current = setInterval(() => {
       setTimer(prev => {
-        if (prev <= 1) { clearTimer(); setIncomingJob(null); return 0; }
+        if (prev <= 1) { clearTimerFn(); setIncomingJob(null); return 0; }
         return prev - 1;
       });
     }, 1000);
   };
 
-  const clearTimer = () => {
+  const clearTimerFn = () => {
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
   };
 
   const acceptJob = async (job) => {
     setAccepting(true);
-    clearTimer();
+    clearTimerFn();
     try {
-      const { data, error } = await supabase
+      var { data, error } = await supabase
         .from("jobs")
         .update({
           worker_id: user.id,
@@ -106,46 +98,45 @@ export default function HomeScreen() {
         })
         .eq("id", job.id)
         .eq("status", "pending")
-        .select()
-        
+        .select();
 
-      const updated = (data && data.length > 0) ? data[0] : null;
-      if (error || !updated) {
-        console.error("Failed to accept — job may already be taken:", error);
+      var accepted = (data && data.length > 0) ? data[0] : null;
+
+      if (error || !accepted) {
+        console.error("Accept failed:", error);
         setIncomingJob(null);
         setPendingJobs(prev => prev.filter(j => j.id !== job.id));
         setAccepting(false);
         return;
       }
 
-      console.log("[Worker] Job accepted:", updated.id);
+      console.log("[Worker] Job accepted:", accepted.id);
 
-      await supabase.from("notifications").insert({
-        user_id: updated.customer_id,
-        title: "✅ Worker on the way!",
-        body: (worker?.full_name || "Your worker") + " accepted your " + updated.service + " job. They're heading to you now!",
+      // Notify customer — fire and forget
+      supabase.from("notifications").insert({
+        user_id: accepted.customer_id,
+        title: "Worker on the way!",
+        body: (worker?.full_name || "Your worker") + " accepted your " + accepted.service + " job.",
         type: "job_accepted",
-        data: { job_id: updated.id },
-      });
+      }).then(function() { console.log("Customer notified"); });
 
-      setActiveJob(updated);
+      setActiveJob(accepted);
       setIncomingJob(null);
       setPendingJobs(prev => prev.filter(j => j.id !== job.id));
+      setAccepting(false);
       navigate("activejob");
+
     } catch (e) {
       console.error("Accept error:", e);
+      setAccepting(false);
     }
-    setAccepting(false);
   };
 
-  const declineJob = (job) => {
-    clearTimer();
+  const declineJob = () => {
+    clearTimerFn();
+    var current = incomingJob;
     setIncomingJob(null);
-    setPendingJobs(prev => prev.filter(j => j.id !== job.id));
-  };
-
-  const showNextJob = () => {
-    const remaining = pendingJobs.filter(j => j.id !== incomingJob?.id);
+    var remaining = pendingJobs.filter(j => j.id !== current?.id);
     if (remaining.length > 0) showIncomingJob(remaining[0]);
   };
 
@@ -165,13 +156,12 @@ export default function HomeScreen() {
             </div>
           </div>
           <span className={"badge " + (isOnline ? "badge-success" : "badge-gray")} style={{ animation: isOnline ? "pulse 2s infinite" : "none" }}>
-            {isOnline ? "● Online" : "Offline"}
+            {isOnline ? "Online" : "Offline"}
           </span>
         </div>
       </div>
 
       <div className="scroll-body" style={{ paddingTop: 0 }}>
-        {/* Online toggle */}
         <div className="fade-up-1 card-gold" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
           <div>
             <div style={{ fontWeight: 700, fontSize: 15, color: "var(--text)", marginBottom: 4 }}>
@@ -188,11 +178,9 @@ export default function HomeScreen() {
           </label>
         </div>
 
-        {/* INCOMING JOB REQUEST — REAL-TIME */}
         {incomingJob && isOnline && (
           <div className="fade-up card" style={{ marginBottom: 20, border: "1.5px solid var(--gold)", position: "relative", overflow: "hidden" }}>
             <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: "linear-gradient(90deg, var(--gold), var(--gold-mid))", animation: "pulse 1s infinite" }} />
-
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <span style={{ fontSize: 22 }}>🔔</span>
@@ -201,7 +189,6 @@ export default function HomeScreen() {
                   <div style={{ fontSize: 11, color: "var(--text-muted)" }}>from {incomingJob.customer_name || "Customer"}</div>
                 </div>
               </div>
-
               <div style={{ position: "relative", width: 52, height: 52 }}>
                 <svg width="52" height="52" style={{ transform: "rotate(-90deg)" }}>
                   <circle cx="26" cy="26" r="22" fill="none" stroke="var(--bg-4)" strokeWidth="3" />
@@ -215,31 +202,25 @@ export default function HomeScreen() {
                 <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Playfair Display', serif", fontWeight: 700, fontSize: 14, color: timer <= 10 ? "var(--danger)" : "var(--gold)" }}>{timer}</div>
               </div>
             </div>
-
             <div style={{ background: "var(--bg-3)", borderRadius: "var(--radius-sm)", padding: "12px 14px", marginBottom: 14 }}>
               <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 6 }}>{incomingJob.service} — {incomingJob.description || "Service needed"}</div>
               <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 3 }}>📍 {incomingJob.address || "Iloilo City"}</div>
               <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 3 }}>🕐 {incomingJob.when_needed || "ASAP"}</div>
               <div style={{ fontSize: 12, color: "var(--text-muted)" }}>👤 {incomingJob.customer_name || "Customer"}</div>
             </div>
-
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-              <div>
-                <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 2 }}>Your earnings</div>
-                <div style={{ fontFamily: "'Playfair Display', serif", fontWeight: 700, fontSize: 28, color: "var(--gold)" }}>₱{incomingJob.price || incomingJob.budget || 0}</div>
-              </div>
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 2 }}>Your earnings</div>
+              <div style={{ fontFamily: "'Playfair Display', serif", fontWeight: 700, fontSize: 28, color: "var(--gold)" }}>P{incomingJob.price || incomingJob.budget || 0}</div>
             </div>
-
             <div style={{ display: "flex", gap: 10 }}>
               <button className="btn btn-gold" style={{ flex: 2 }} onClick={() => acceptJob(incomingJob)} disabled={accepting}>
-                {accepting ? "Accepting..." : "✓ Accept job"}
+                {accepting ? "Accepting..." : "Accept job"}
               </button>
-              <button className="btn btn-danger" style={{ flex: 1 }} onClick={() => { declineJob(incomingJob); showNextJob(); }}>✗</button>
+              <button className="btn btn-danger" style={{ flex: 1 }} onClick={declineJob}>X</button>
             </div>
           </div>
         )}
 
-        {/* Available jobs list */}
         {isOnline && !incomingJob && pendingJobs.length > 0 && (
           <>
             <p className="section-label fade-up-2">Available jobs ({pendingJobs.length})</p>
@@ -249,34 +230,37 @@ export default function HomeScreen() {
                   <div>
                     <div style={{ fontWeight: 700, fontSize: 14 }}>{job.service}</div>
                     <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>{job.description || "Service needed"}</div>
-                    <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>📍 {job.address || "Nearby"} · 🕐 {job.when_needed || "ASAP"} · 👤 {job.customer_name || "Customer"}</div>
+                    <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>📍 {job.address || "Nearby"} | {job.customer_name || "Customer"}</div>
                   </div>
-                  <div style={{ fontFamily: "'Playfair Display', serif", fontWeight: 700, fontSize: 20, color: "var(--gold)", flexShrink: 0 }}>₱{job.price}</div>
+                  <div style={{ fontFamily: "'Playfair Display', serif", fontWeight: 700, fontSize: 20, color: "var(--gold)", flexShrink: 0 }}>P{job.price}</div>
                 </div>
-                <button className="btn btn-gold btn-sm" style={{ width: "100%" }} onClick={e => { e.stopPropagation(); showIncomingJob(job); }}>View & Accept →</button>
+                <button className="btn btn-gold btn-sm" style={{ width: "100%" }} onClick={e => { e.stopPropagation(); showIncomingJob(job); }}>View and Accept</button>
               </div>
             ))}
           </>
         )}
 
-        {/* Empty state */}
         {isOnline && !incomingJob && pendingJobs.length === 0 && (
           <div className="fade-up-2" style={{ textAlign: "center", padding: "40px 20px" }}>
             <div style={{ fontSize: 48, marginBottom: 16, opacity: 0.6 }}>📡</div>
             <h3 style={{ marginBottom: 8, color: "var(--text)" }}>Listening for jobs...</h3>
             <p style={{ color: "var(--text-muted)", fontSize: 13, lineHeight: 1.7 }}>
-              You're online and visible to customers in {worker?.city || "Iloilo City"}.<br />New jobs will appear here instantly.
+              You are online and visible to customers.<br />New jobs will appear here instantly.
             </p>
-            <div style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 16 }}>
-              {[0,1,2].map(i => (<div key={i} style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--gold)", opacity: 0.5, animation: "pulse 1.5s " + (i*0.3) + "s infinite" }} />))}
-            </div>
           </div>
         )}
 
-        {/* Stats */}
+        {!isOnline && (
+          <div style={{ textAlign: "center", padding: "40px 20px" }}>
+            <div style={{ fontSize: 48, marginBottom: 16, opacity: 0.4 }}>🔒</div>
+            <h3 style={{ marginBottom: 8, color: "var(--text-muted)" }}>You are offline</h3>
+            <p style={{ color: "var(--text-muted)", fontSize: 13 }}>Toggle the switch above to start receiving jobs</p>
+          </div>
+        )}
+
         <p className="section-label fade-up-2" style={{ marginTop: 8 }}>Today's summary</p>
         <div className="fade-up-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 20 }}>
-          {[{ label: "Earned", value: "₱" + todayEarnings }, { label: "Jobs", value: todayJobs }, { label: "Rating", value: (worker?.rating || 0) + "★" }].map(s => (
+          {[{ label: "Earned", value: "P" + todayEarnings }, { label: "Jobs", value: todayJobs }, { label: "Rating", value: (worker?.rating || 0) + "*" }].map(s => (
             <div key={s.label} className="card" style={{ textAlign: "center", padding: "14px 8px" }}>
               <div style={{ fontFamily: "'Playfair Display', serif", fontWeight: 700, fontSize: 20, color: "var(--gold)", marginBottom: 4 }}>{s.value}</div>
               <div style={{ fontSize: 10, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>{s.label}</div>
@@ -286,7 +270,7 @@ export default function HomeScreen() {
 
         <p className="section-label fade-up-3">Your services</p>
         <div className="fade-up-3" style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 20 }}>
-          {(worker?.skills || ["Electrical", "Plumbing"]).map(s => (<span key={s} className="badge badge-gold">{s}</span>))}
+          {(worker?.skills || ["General"]).map(s => (<span key={s} className="badge badge-gold">{s}</span>))}
         </div>
       </div>
     </div>
