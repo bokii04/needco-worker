@@ -95,7 +95,7 @@ export default function HomeScreen() {
     setAccepting(true);
     clearTimer();
     try {
-      const { data: updated, error } = await supabase
+      const { data, error } = await supabase
         .from("jobs")
         .update({
           worker_id: user.id,
