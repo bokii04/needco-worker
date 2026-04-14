@@ -27,7 +27,7 @@ export function AppProvider({ children }) {
         .from("users")
         .select("*")
         .eq("id", u.id)
-        .single();
+        .maybeSingle();
       existingUser = userData;
 
       // Create if doesn't exist
@@ -42,7 +42,7 @@ export function AppProvider({ children }) {
             is_onboarded: false,
           })
           .select()
-          .single();
+          .maybeSingle();
         existingUser = newUser;
       }
 
@@ -51,7 +51,7 @@ export function AppProvider({ children }) {
         .from("workers")
         .select("*")
         .eq("user_id", u.id)
-        .single();
+        .maybeSingle();
 
       console.log("User:", existingUser?.name, "Worker:", workerData?.status);
 
