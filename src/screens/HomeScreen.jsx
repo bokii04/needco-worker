@@ -46,7 +46,7 @@ export default function HomeScreen() {
         console.log("[Worker] New job detected:", newJob.service, newJob.id);
 
         if (newJob.status === "pending" && !newJob.worker_id) {
-          const hasSkill = !worker.skills || worker.skills.length === 0 || worker.skills.includes(newJob.service);
+          const hasSkill = true;
           if (hasSkill) {
             setPendingJobs(prev => [newJob, ...prev]);
             showIncomingJob(newJob);
